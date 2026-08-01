@@ -1,7 +1,7 @@
 import kotlinx.kover.gradle.plugin.dsl.CoverageUnit
+import java.io.FileInputStream
 import java.net.URL
 import java.util.Properties
-import java.io.FileInputStream
 
 plugins {
     alias(libs.plugins.android.application)
