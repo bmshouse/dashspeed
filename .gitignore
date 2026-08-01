@@ -1,0 +1,38 @@
+# Gradle caches and wrapper downloads
+.gradle/
+build/
+
+# Android Studio / IntelliJ IDEA
+*.iml
+.idea/
+.navigation/
+
+# macOS
+.DS_Store
+
+# Local machine config (SDK path, signing, personal gradle properties)
+local.properties
+
+# Build outputs
+*.apk
+*.aab
+*.ap_
+
+# Native build artifacts
+.externalNativeBuild/
+.cxx/
+
+# Signing keys — never commit these
+*.jks
+*.keystore
+signing.properties
+
+# Kotlin incremental compilation metadata
+.kotlin/
+
+# Capture tool output (Android Studio profiler, etc.)
+captures/
+
+# Model asset — downloaded by the downloadModel Gradle task (see gradle.properties)
+# Place the file manually in app/src/main/assets/ or set modelUrl in gradle.properties
+app/src/main/assets/*.tflite

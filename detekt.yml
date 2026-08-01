@@ -1,0 +1,65 @@
+build:
+  maxIssues: 0
+
+config:
+  validation: true
+  warningsAsErrors: false
+
+complexity:
+  active: true
+  LongMethod:
+    active: true
+    threshold: 40  # Compose screen functions routinely run 30-40 lines
+    ignoreAnnotated: ['Composable']
+  LongParameterList:
+    active: true
+    functionThreshold: 8
+    constructorThreshold: 8
+  CyclomaticComplexMethod:
+    active: true
+    threshold: 15
+
+naming:
+  active: true
+  FunctionNaming:
+    active: true
+    # Composable functions use PascalCase by Compose convention
+    ignoreAnnotated: ['Composable']
+  MatchingDeclarationName:
+    active: false  # DashSpeedColors in Color.kt is intentional
+
+performance:
+  active: true
+  ArrayPrimitive:
+    active: true
+  ForEachOnRange:
+    active: true
+  SpreadOperator:
+    active: true
+
+coroutines:
+  active: true
+  GlobalCoroutineUsage:
+    active: true
+  RedundantSuspendModifier:
+    active: true
+
+style:
+  active: true
+  MagicNumber:
+    active: false  # constants in Color.kt, ModelConfig, etc. are self-documenting
+  ReturnCount:
+    active: true
+    max: 3
+  UnusedPrivateMember:
+    active: true
+    ignoreAnnotated: ['Ignore', 'Ignored']
+  FunctionOnlyReturningConstant:
+    active: false  # stub implementations return null/empty until each phase
+  UnusedParameter:
+    active: false  # stub implementations declare future parameters
+
+exceptions:
+  active: true
+  NotImplementedDeclaration:
+    active: false  # stubs legitimately throw NotImplementedError
