@@ -24,6 +24,9 @@ jobs:
           key: gradle-${{ hashFiles('**/*.gradle.kts', '**/gradle-wrapper.properties', '**/libs.versions.toml') }}
           restore-keys: gradle-
 
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
       - name: ktlint
         run: ./gradlew ktlintCheck
 
