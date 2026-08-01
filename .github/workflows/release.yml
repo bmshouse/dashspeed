@@ -2,8 +2,7 @@ name: Android Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [main]
 
 permissions:
   contents: write
@@ -52,13 +51,26 @@ jobs:
         if: always()
         run: rm -f dashspeed-release-key.keystore signing.properties
 
-      - name: Rename APK with version tag
+      - name: Get version name
+        id: get_version
+        run: |
+          VERSION_NAME=$(grep 'versionName' app/build.gradle.kts | sed 's/.*"\(.*\)".*/\1/')
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Rename APK
         run: |
           mv app/build/outputs/apk/release/app-release.apk \
-             app/build/outputs/apk/release/dashspeed-${{ github.ref_name }}-release.apk
+             app/build/outputs/apk/release/DashSpeed.v${{ steps.get_version.outputs.version_name }}.apk
+
+      - name: Delete existing release tag if present
+        run: git push origin ":refs/tags/v${{ steps.get_version.outputs.version_name }}" || true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: app/build/outputs/apk/release/dashspeed-${{ github.ref_name }}-release.apk
+          tag_name: v${{ steps.get_version.outputs.version_name }}
+          name: DashSpeed v${{ steps.get_version.outputs.version_name }}
           generate_release_notes: true
+          make_latest: true
+          fail_on_unmatched_files: true
+          files: app/build/outputs/apk/release/DashSpeed.v${{ steps.get_version.outputs.version_name }}.apk
