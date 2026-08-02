@@ -35,4 +35,4 @@ captures/
 
 # Model asset — downloaded by the downloadModel Gradle task (see gradle.properties)
 # Place the file manually in app/src/main/assets/ or set modelUrl in gradle.properties
-app/src/main/assets/*.tflite
+# app/src/main/assets/*.tflite
