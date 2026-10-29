@@ -86,11 +86,67 @@ class SortTrackerTest : FreeSpec({
         result.first().history.map { it.timestampMs } shouldBe listOf(133L, 166L, 199L, 232L)
     }
 
-    "history is capped at 10 samples" {
+    "history is capped at 30 samples" {
         val tracker = SortTracker()
         val feeder = FrameFeeder(tracker)
         val det = listOf(Detection(rect(100f, 100f, 200f, 200f), classId = 2, confidence = 0.9f))
-        repeat(20) { feeder.feed(det) }
-        feeder.feed(det).first().history shouldHaveSize 10
+        repeat(40) { feeder.feed(det) }
+        feeder.feed(det).first().history shouldHaveSize 30
+    }
+
+    "a weak detection cannot start a track" {
+        val tracker = SortTracker()
+        val feeder = FrameFeeder(tracker)
+        val weak = listOf(Detection(rect(100f, 100f, 200f, 200f), classId = 2, confidence = 0.2f))
+        repeat(10) { feeder.feed(weak).shouldBeEmpty() }
+    }
+
+    "weak detections keep an established track alive through low-confidence frames" {
+        val tracker = SortTracker()
+        val feeder = FrameFeeder(tracker)
+        val strong = listOf(Detection(rect(100f, 100f, 200f, 200f), classId = 2, confidence = 0.8f))
+        val weak = listOf(Detection(rect(101f, 100f, 201f, 200f), classId = 2, confidence = 0.2f))
+        repeat(5) { feeder.feed(strong) }
+        val id = feeder.feed(strong).first().id
+        repeat(8) {
+            val visible = feeder.feed(weak)
+            visible shouldHaveSize 1
+            visible.first().id shouldBe id
+            visible.first().coasting shouldBe false
+        }
+    }
+
+    "a confirmed track coasts for a couple of missed frames, then disappears" {
+        val tracker = SortTracker()
+        val feeder = FrameFeeder(tracker)
+        val det = listOf(Detection(rect(100f, 100f, 200f, 200f), classId = 2, confidence = 0.9f))
+        repeat(6) { feeder.feed(det) }
+        val first = feeder.feed(emptyList())
+        first shouldHaveSize 1
+        first.first().coasting shouldBe true
+        feeder.feed(emptyList()) shouldHaveSize 1 // second missed frame: still shown
+        feeder.feed(emptyList()).shouldBeEmpty() // third: dropped from the output
+    }
+
+    "a coasting track resumes under the same id" {
+        val tracker = SortTracker()
+        val feeder = FrameFeeder(tracker)
+        val det = listOf(Detection(rect(100f, 100f, 200f, 200f), classId = 2, confidence = 0.9f))
+        repeat(6) { feeder.feed(det) }
+        val id = feeder.feed(det).first().id
+        feeder.feed(emptyList())
+        feeder.feed(det).first().id shouldBe id
+    }
+
+    "a bottom-clipped detection updates the track but adds no speed sample" {
+        val tracker = SortTracker()
+        val feeder = FrameFeeder(tracker)
+        val det = listOf(Detection(rect(100f, 100f, 200f, 200f), classId = 2, confidence = 0.9f))
+        val clippedBox = rect(100f, 100f, 200f, 200f)
+        val clipped = listOf(Detection(clippedBox, classId = 2, confidence = 0.9f, bottomClipped = true))
+        repeat(5) { feeder.feed(det) }
+        val before = feeder.feed(det).first().history.size
+        val after = feeder.feed(clipped).first().history.size
+        after shouldBe before
     }
 })

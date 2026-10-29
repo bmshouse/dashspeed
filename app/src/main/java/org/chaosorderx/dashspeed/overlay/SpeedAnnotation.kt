@@ -9,6 +9,8 @@ data class SpeedAnnotation(
     val modelBox: RectF,
     val speedMph: Float,
     val relativeMph: Float,
+    /** True for small, far boxes: a long-window estimate that shouldn't drive alerts. */
+    val approximate: Boolean = false,
 ) {
     // RectF.toString() is not available in JVM unit-test stubs; exclude modelBox from toString.
     override fun toString() = "SpeedAnnotation(trackId=$trackId, speedMph=$speedMph, relativeMph=$relativeMph)"

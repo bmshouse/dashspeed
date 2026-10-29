@@ -55,6 +55,9 @@ class MainViewModelTest : FreeSpec({
             gpsManager = mockGpsManager,
             alertEngine = mockk(relaxed = true),
             vehicleDetector = mockk(relaxed = true),
+            staticMaskLearner = mockk(relaxed = true),
+            bandLearner = mockk(relaxed = true),
+            debugRecorder = mockk(relaxed = true),
             prefsRepository = fakePrefsRepo(),
         )
     }

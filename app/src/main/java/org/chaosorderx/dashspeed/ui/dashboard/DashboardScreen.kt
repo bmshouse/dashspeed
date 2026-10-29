@@ -14,7 +14,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -33,8 +36,11 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import org.chaosorderx.dashspeed.camera.CameraManager
 import org.chaosorderx.dashspeed.overlay.SpeedOverlayCanvas
+import org.chaosorderx.dashspeed.overlay.StaticMaskOverlay
 import org.chaosorderx.dashspeed.ui.calibration.CalibrationActivity
+import org.chaosorderx.dashspeed.ui.settings.OverlayActions
 import org.chaosorderx.dashspeed.ui.settings.SettingsBottomSheet
+import org.chaosorderx.dashspeed.ui.theme.DashSpeedTypography
 
 @Composable
 fun DashboardScreen(
@@ -48,6 +54,9 @@ fun DashboardScreen(
     val prefs by viewModel.prefs.collectAsState()
 
     var showSettings by remember { mutableStateOf(false) }
+    var editingMask by remember { mutableStateOf(false) }
+    val staticMask by viewModel.staticMask.collectAsState()
+    val staticLearning by viewModel.staticLearning.collectAsState()
     var lastAlertMessage by remember { mutableStateOf("") }
     uiState.alertMessage?.also { lastAlertMessage = it }
 
@@ -77,8 +86,39 @@ fun DashboardScreen(
         SpeedOverlayCanvas(
             annotations = uiState.annotations,
             tracks = uiState.tracks,
+            lead = uiState.lead,
+            showSpeedTags = prefs.showSpeedTags,
             textMeasurer = textMeasurer,
             modifier = Modifier.fillMaxSize(),
+        )
+
+        if (prefs.showStaticOverlay && !editingMask) {
+            StaticMaskOverlay(cells = staticMask.toCells(), modifier = Modifier.fillMaxSize())
+        }
+
+        if (staticLearning && !editingMask) {
+            Text(
+                text = "Learning hood / mount area while driving…",
+                style = DashSpeedTypography.HudCaption,
+                color = Color.White,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp),
+            )
+        }
+
+        if (viewModel.debugEnabled && !editingMask) {
+            OutlinedButton(
+                onClick = viewModel::markMoment,
+                // Below the HUD strip, which spans the full top edge.
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 56.dp, end = 12.dp),
+            ) {
+                Text("Mark", color = Color.White)
+            }
+        }
+
+        LaneChips(
+            lanes = uiState.lanes,
+            egoMph = uiState.egoSpeedMph,
+            modifier = Modifier.align(Alignment.TopStart).padding(top = 56.dp, start = 56.dp),
         )
 
         HudStrip(
@@ -120,6 +160,17 @@ fun DashboardScreen(
         )
     }
 
+    if (editingMask) {
+        StaticMaskEditor(
+            initial = staticMask,
+            onDone = {
+                viewModel.setStaticMask(it)
+                editingMask = false
+            },
+            onCancel = { editingMask = false },
+        )
+    }
+
     if (showSettings) {
         SettingsBottomSheet(
             prefs = prefs,
@@ -130,6 +181,19 @@ fun DashboardScreen(
                 showSettings = false
                 activity.startActivity(Intent(activity, CalibrationActivity::class.java))
             },
+            overlay =
+                OverlayActions(
+                    onRelearn = {
+                        showSettings = false
+                        viewModel.relearnStaticAreas()
+                    },
+                    onShowOverlayChange = viewModel::updateShowStaticOverlay,
+                    onShowSpeedTagsChange = viewModel::updateShowSpeedTags,
+                    onPaint = {
+                        showSettings = false
+                        editingMask = true
+                    },
+                ),
             onDismiss = { showSettings = false },
         )
     }

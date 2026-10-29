@@ -8,8 +8,9 @@ import kotlin.math.abs
 private const val STATE_DIM = 8 // [cx, cy, w, h, vx, vy, vw, vh]
 private const val MEAS_DIM = 4 // [cx, cy, w, h]
 
-// Position samples retained per track for windowed speed estimation (~0.3–0.5 s at 20–30 fps).
-private const val HISTORY_SIZE = 10
+// Position samples retained per track for windowed speed estimation (~2 s at 15 fps:
+// far, small boxes need a long window).
+private const val HISTORY_SIZE = 30
 
 // Tuning constants — adjust these to trade off smoothness vs. responsiveness
 private const val INIT_P_POS = 10f // initial position-state covariance
@@ -111,6 +112,9 @@ private fun inverse(a: Mat): Mat? {
 class KalmanBoxTracker(initialBox: RectF, val id: Int) {
     var age: Int = 0
     var hitStreak: Int = 0
+
+    /** Total matched updates over the track's life (a track is confirmed once this reaches minHits). */
+    var hits: Int = 0
     var timeSinceUpdate: Int = 0
 
     private val historyBuffer = ArrayDeque<PositionSample>(HISTORY_SIZE)
@@ -196,6 +200,7 @@ class KalmanBoxTracker(initialBox: RectF, val id: Int) {
     fun update(
         box: RectF,
         frameTimestampMs: Long,
+        recordSample: Boolean = true,
     ) {
         // z = measured [cx, cy, w, h]; innovation y = z - H @ x (H selects first 4 components)
         val z =
@@ -224,7 +229,9 @@ class KalmanBoxTracker(initialBox: RectF, val id: Int) {
         p = matMul(iKh, p)
 
         hitStreak++
+        hits++
         timeSinceUpdate = 0
+        if (!recordSample) return
 
         val corrected = stateToBox()
         val sample =
