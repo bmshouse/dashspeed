@@ -14,10 +14,11 @@ class HomographyCalibrator
     @Inject
     constructor() {
         companion object {
-            // Approximate focal length in pixels for a 416px model frame (~60° vertical FOV).
+            // Approximate focal length in pixels for the 416px frame-normalised space (~60° vertical FOV).
+            // Independent of the detection model's input size (see ModelConfig.FRAME_SPACE).
             private const val FOCAL_LENGTH_PX = 360f
             private const val MODEL_CENTER_Y = 208f
-            private const val MODEL_INPUT_SIZE = 416f
+            private const val FRAME_SPACE = 416f
 
             // Fallback mpp when no calibration matrix is available.
             // 0.66 m/px at mid-frame matches the unit-test track builders (dt/0.05 = 0.033/0.05).
@@ -92,7 +93,7 @@ class HomographyCalibrator
             matrixJson: String,
         ): Float {
             val params = if (matrixJson.isEmpty()) null else getParams(matrixJson)
-            if (params == null) return (MODEL_INPUT_SIZE - y) * DEFAULT_MPP
+            if (params == null) return (FRAME_SPACE - y) * DEFAULT_MPP
             val alpha = (y - MODEL_CENTER_Y) / params.fy
             val beta = (params.tiltRad + alpha).coerceAtLeast(MIN_BETA_RAD)
             return (params.h / tan(beta.toDouble()).toFloat()).coerceIn(0f, MAX_GROUND_DISTANCE_M)

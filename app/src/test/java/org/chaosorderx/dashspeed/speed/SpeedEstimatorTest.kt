@@ -84,9 +84,27 @@ class SpeedEstimatorTest : FreeSpec({
         result.speedMph shouldBeGreaterThan 70f
     }
 
-    "returns null for bounding box shorter than MIN_BOX_HEIGHT_PX" {
-        val track = buildLinearTrack(id = 20, relativeMps = 20f, boxHeightPx = 10f)
+    "returns null for a box shorter than the small-box minimum" {
+        val track = buildLinearTrack(id = 20, relativeMps = 20f, boxHeightPx = 8f, frames = 30)
         estimator.estimate(track, egoSpeedMps = 0f).shouldBeNull()
+    }
+
+    "a small box needs a long history, and its estimate is flagged approximate" {
+        val short = buildLinearTrack(id = 21, relativeMps = 4.47f, boxHeightPx = 14f, frames = 10, dtMs = 67L)
+        estimator.estimate(short, egoSpeedMps = 26.8f).shouldBeNull()
+        // 24 samples at 15 fps span about 1.5 s.
+        val long = buildLinearTrack(id = 22, relativeMps = 4.47f, boxHeightPx = 14f, frames = 24, dtMs = 67L)
+        val result = estimator.estimate(long, egoSpeedMps = 26.8f)
+        result.shouldNotBeNull()
+        result.approximate shouldBe true
+        result.speedMph.shouldBeWithinPercentageOf(70f, 8.0)
+    }
+
+    "a tall box with a long history uses only its recent samples and is not approximate" {
+        val track = buildLinearTrack(id = 23, relativeMps = 4.47f, boxHeightPx = 100f, frames = 30, dtMs = 67L)
+        val result = estimator.estimate(track, egoSpeedMps = 26.8f)
+        result.shouldNotBeNull()
+        result.approximate shouldBe false
     }
 
     "cleanupTracks evicts stale EMA entries — evicted track resets to raw value" {

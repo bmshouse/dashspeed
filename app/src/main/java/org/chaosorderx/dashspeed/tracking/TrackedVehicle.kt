@@ -12,4 +12,6 @@ data class TrackedVehicle(
     val id: Int,
     val boundingBox: RectF,
     val history: List<PositionSample>,
+    /** True when this frame had no matching detection and [boundingBox] is the predicted position. */
+    val coasting: Boolean = false,
 )

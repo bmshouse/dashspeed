@@ -4,22 +4,30 @@ import android.content.Context
 import android.speech.tts.TextToSpeech
 import dagger.hilt.android.qualifiers.ApplicationContext
 import org.chaosorderx.dashspeed.data.UserPreferences
-import org.chaosorderx.dashspeed.overlay.SpeedAnnotation
+import org.chaosorderx.dashspeed.tracking.OwnLaneApproach
 import timber.log.Timber
 import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
+internal const val APPROACH_SUSTAIN_MS = 1_000L
+internal const val MPS_TO_MPH = 2.237f
+
+/**
+ * "Fast approach" when the nearest own-lane car has been closing at least [thresholdMph] with under 5 s to
+ * contact for [APPROACH_SUSTAIN_MS]. Driven by box growth, not the pixel-row speed estimate, which field logs
+ * showed to be unreliable for the large boxes of near cars.
+ */
 internal fun shouldAlert(
-    annotations: List<SpeedAnnotation>,
+    approach: OwnLaneApproach?,
     now: Long,
     lastAlertMs: Long,
     cooldownMs: Long,
     thresholdMph: Float,
 ): String? {
-    if (now - lastAlertMs < cooldownMs) return null
-    val fastest = annotations.minByOrNull { it.relativeMph } ?: return null
-    return if (fastest.relativeMph < -thresholdMph) "Fast approach" else null
+    if (approach == null || now - lastAlertMs < cooldownMs) return null
+    val sustained = approach.sustainedMs >= APPROACH_SUSTAIN_MS
+    return if (sustained && approach.closingMps * MPS_TO_MPH >= thresholdMph) "Fast approach" else null
 }
 
 @Singleton
@@ -54,9 +62,9 @@ class AlertEngine
             cooldownMs = prefs.alertCooldownSec * 1000L
         }
 
-        fun evaluate(annotations: List<SpeedAnnotation>): String? {
+        fun evaluate(approach: OwnLaneApproach?): String? {
             val now = System.currentTimeMillis()
-            val message = shouldAlert(annotations, now, lastAlertMs, cooldownMs, thresholdMph)
+            val message = shouldAlert(approach, now, lastAlertMs, cooldownMs, thresholdMph)
             if (message != null) {
                 if (ttsReady) {
                     tts?.speak(message, TextToSpeech.QUEUE_FLUSH, null, "alert")

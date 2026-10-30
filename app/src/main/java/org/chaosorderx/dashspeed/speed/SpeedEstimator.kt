@@ -20,8 +20,16 @@ class SpeedEstimator
         @Volatile private var matrixJson = ""
 
         companion object {
-            // Boxes shorter than this (model pixels) are too far away for reliable estimates.
+            // Boxes at least this tall (frame-normalised px) get a quick estimate; shorter, farther boxes
+            // down to MIN_SMALL_BOX_HEIGHT_PX need a much longer window and are flagged approximate:
+            // one pixel of bottom-edge jitter is metres of distance error for a far vehicle.
             internal const val MIN_BOX_HEIGHT_PX = 20f
+            internal const val MIN_SMALL_BOX_HEIGHT_PX = 10f
+            internal const val SMALL_MIN_SAMPLES = 20
+            internal const val SMALL_MIN_WINDOW_SEC = 1.2f
+
+            // Quick estimates use only the most recent samples of the (longer) history.
+            internal const val NORMAL_WINDOW_SAMPLES = 10
 
             // Minimum history before an estimate is emitted. Frame-pair differencing amplifies
             // one pixel of box jitter into tens of m/s; a windowed fit divides that noise down.
@@ -60,12 +68,16 @@ class SpeedEstimator
             track: TrackedVehicle,
             egoSpeedMps: Float,
         ): SpeedAnnotation? {
-            val history = track.history
             // Direct field subtraction — RectF.height() is stubbed in JVM unit tests.
+            val boxHeight = track.boundingBox.bottom - track.boundingBox.top
+            val small = boxHeight < MIN_BOX_HEIGHT_PX
+            val history = if (small) track.history else track.history.takeLast(NORMAL_WINDOW_SAMPLES)
+            val minSamples = if (small) SMALL_MIN_SAMPLES else MIN_SAMPLES
+            val minWindowSec = if (small) SMALL_MIN_WINDOW_SEC else MIN_WINDOW_SEC
             val usable =
-                track.boundingBox.bottom - track.boundingBox.top >= MIN_BOX_HEIGHT_PX &&
-                    history.size >= MIN_SAMPLES &&
-                    (history.last().timestampMs - history.first().timestampMs) / 1_000f >= MIN_WINDOW_SEC
+                boxHeight >= MIN_SMALL_BOX_HEIGHT_PX &&
+                    history.size >= minSamples &&
+                    (history.last().timestampMs - history.first().timestampMs) / 1_000f >= minWindowSec
             val relativeMps = if (usable) relativeSpeedMps(history) else null
             if (relativeMps == null || abs(relativeMps) > MAX_RELATIVE_MPS) return null
 
@@ -79,6 +91,7 @@ class SpeedEstimator
                     modelBox = RectF(track.boundingBox),
                     speedMph = displayMps * MPS_TO_MPH,
                     relativeMph = (displayMps - egoSpeedMps) * MPS_TO_MPH,
+                    approximate = small,
                 )
             }
         }

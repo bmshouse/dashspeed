@@ -2,7 +2,12 @@ package org.chaosorderx.dashspeed.camera
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import org.chaosorderx.dashspeed.debug.DebugRecorder
+import org.chaosorderx.dashspeed.detection.BandLearner
+import org.chaosorderx.dashspeed.detection.HoodDetector
+import org.chaosorderx.dashspeed.detection.StaticMaskLearner
 import org.chaosorderx.dashspeed.detection.VehicleDetector
+import org.chaosorderx.dashspeed.gps.GpsManager
 import org.junit.Ignore
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -12,7 +17,8 @@ import org.junit.runner.RunWith
 class CameraManagerTest {
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
     private val detector = VehicleDetector(context)
-    private val processor = FrameProcessor(detector)
+    private val processor =
+        FrameProcessor(detector, StaticMaskLearner(), BandLearner(), HoodDetector(), GpsManager(context), DebugRecorder(context))
     private val manager = CameraManager(context, processor)
 
     @Test

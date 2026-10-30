@@ -39,8 +39,8 @@ android {
         applicationId = "org.chaosorderx.dashspeed"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
 
         testInstrumentationRunner = "org.chaosorderx.dashspeed.HiltTestRunner"
     }
@@ -120,6 +120,7 @@ kover {
                 // instrumented tests (Robolectric/Compose test framework), not unit tests.
                 classes(
                     "*.SpeedOverlayCanvasKt",
+                    "*.StaticMaskOverlayKt",
                     "*.AlertEngine",
                     // GpsManager uses FusedLocationProviderClient; bearingDelta() is tested separately.
                     "*.GpsManager",
@@ -206,6 +207,7 @@ dependencies {
 
     implementation(libs.litert)
     implementation(libs.litert.gpu)
+    implementation(libs.litert.gpu.api)
     implementation(libs.litert.support)
 
     implementation(libs.play.services.location)

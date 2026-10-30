@@ -40,6 +40,7 @@ camera-view = { group = "androidx.camera", name = "camera-view", version.ref = "
 
 litert = { group = "com.google.ai.edge.litert", name = "litert", version.ref = "litert" }
 litert-gpu = { group = "com.google.ai.edge.litert", name = "litert-gpu", version.ref = "litert" }
+litert-gpu-api = { group = "com.google.ai.edge.litert", name = "litert-gpu-api", version.ref = "litert" }
 litert-support = { group = "com.google.ai.edge.litert", name = "litert-support", version.ref = "litert" }
 
 play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
