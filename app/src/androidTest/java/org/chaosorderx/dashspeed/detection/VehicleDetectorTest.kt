@@ -199,8 +199,8 @@ class VehicleDetectorTest {
 
     @Test
     fun reloadingAModelUsesTheGpuKernelCache() {
-        val yolo = targetContext.assets.list("")?.filter { it.endsWith(".tflite") && it.startsWith("yolov8n") }.orEmpty()
-        val modelFile = yolo.firstOrNull { "480x640" in it } ?: yolo.maxOrNull()
+        val yolo = targetContext.assets.list("")?.filter { it.endsWith(".tflite") && it.startsWith("yolo") }.orEmpty()
+        val modelFile = yolo.firstOrNull { "288x800" in it } ?: yolo.maxOrNull()
         assumeTrue("No yolov8n models bundled", modelFile != null)
         val bitmap = Bitmap.createBitmap(640, 480, Bitmap.Config.ARGB_8888)
         val timesMs =

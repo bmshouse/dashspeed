@@ -48,6 +48,8 @@ private class TrackHistory {
     val lateral = ArrayDeque<Float>()
     var lane: Int? = null
     var lastVoteMs = LaneAnalyzer.NEVER
+    var ownSinceMs = LaneAnalyzer.NEVER // since when the lane has been 0 without a break
+    var lastOwnVoteMs = LaneAnalyzer.NEVER
 
     fun add(sample: Sample) {
         samples.addLast(sample)
@@ -107,17 +109,19 @@ class LaneAnalyzer {
     val learnedFlow: Flow<Float> = _learnedFlow.asSharedFlow()
 
     /** Column of the road's vanishing point in frame space; the default until enough evidence has been seen. */
-    var roadCenterX: Float = ModelConfig.FRAME_SPACE / 2f
+    var roadCenterX: Float = DEFAULT_CENTER_X
         private set
 
+    /** [learning] false (turning, crawling) keeps the road centre from drifting: it only holds on a straight road. */
     fun update(
         tracks: List<TrackedVehicle>,
         timestampMs: Long,
+        learning: Boolean = true,
     ): LaneReport {
         tracks.forEach { record(it, timestampMs) }
         val liveIds = tracks.map { it.id }.toSet()
         histories.keys.retainAll(liveIds)
-        learnRoadCenter(timestampMs)
+        if (learning) learnRoadCenter(timestampMs)
         val candidates = candidates(timestampMs)
         val lanes = LANES.map { summarise(it, candidates, timestampMs) }
         val laneByTrack =
@@ -140,7 +144,7 @@ class LaneAnalyzer {
         votes.clear()
         smoothing.values.forEach { it.clear() }
         approachSinceMs = null
-        roadCenterX = ModelConfig.FRAME_SPACE / 2f
+        roadCenterX = DEFAULT_CENTER_X
         lastEmittedX = null
     }
 
@@ -160,6 +164,11 @@ class LaneAnalyzer {
         history.lateral.addLast(LaneMath.lateralMeters(centerX, width, roadCenterX))
         if (history.lateral.size > LATERAL_SMOOTHING) history.lateral.removeFirst()
         history.lane = LaneMath.laneOf(LaneMath.median(history.lateral.toList()), history.lane)
+        if (history.lane != 0) {
+            history.ownSinceMs = NEVER
+        } else if (history.ownSinceMs == NEVER) {
+            history.ownSinceMs = nowMs
+        }
     }
 
     private fun candidates(nowMs: Long): List<Candidate> =
@@ -202,12 +211,16 @@ class LaneAnalyzer {
         return OwnLaneApproach(nearest.trackId, growth, closing, nowMs - since)
     }
 
-    /** Each track, once it has grown or shrunk enough, votes with where its centre column converges as width → 0. */
+    /**
+     * Two kinds of vote: a track that has grown or shrunk enough votes with where its centre column converges as
+     * width → 0, and a distant car that has held our lane votes with the column it implies directly.
+     */
     private fun learnRoadCenter(nowMs: Long) {
         for (h in histories.values) {
-            val vote = voteOf(h, nowMs) ?: continue
-            votes.addLast(vote)
-            if (votes.size > MAX_VOTES) votes.removeFirst()
+            for (vote in listOfNotNull(voteOf(h, nowMs), ownLaneVoteOf(h, nowMs))) {
+                votes.addLast(vote)
+                if (votes.size > MAX_VOTES) votes.removeFirst()
+            }
         }
         if (votes.size >= MIN_VOTES) {
             roadCenterX = LaneMath.median(votes.toList()).coerceIn(CENTER_MIN, CENTER_MAX)
@@ -230,6 +243,24 @@ class LaneAnalyzer {
         h.lastVoteMs = nowMs
         val fit = LaneMath.fitLine(widths.map { it.toDouble() }, h.slow.map { it.centerX.toDouble() })
         return fit?.second?.takeIf { it in VOTE_RANGE }?.toFloat()
+    }
+
+    /**
+     * A small, settled own-lane car sits [LaneMath.OWN_LANE_OFFSET_M] right of the road centre, scaled by its width.
+     * Only votes close to the current estimate count, so cars in neighbouring lanes (≥ 15 px away at this size)
+     * cannot pull it: this refines a roughly right centre, it does not rescue a badly wrong one.
+     */
+    private fun ownLaneVoteOf(
+        h: TrackHistory,
+        nowMs: Long,
+    ): Float? {
+        val last = h.samples.lastOrNull() ?: return null
+        val settled = h.ownSinceMs != NEVER && nowMs - h.ownSinceMs >= OWN_SETTLE_MS
+        val due = nowMs - h.lastOwnVoteMs >= OWN_VOTE_GAP_MS && last.tMs >= nowMs - STALE_MS
+        if (!settled || !due || last.width !in OWN_VOTE_WIDTH_PX) return null
+        h.lastOwnVoteMs = nowMs
+        val vote = last.centerX - LaneMath.OWN_LANE_OFFSET_M * last.width / LaneMath.CAR_WIDTH_M
+        return vote.takeIf { abs(it - roadCenterX) <= OWN_VOTE_GATE_PX }
     }
 
     internal companion object {
@@ -257,8 +288,15 @@ class LaneAnalyzer {
         const val MIN_WIDTH_RATIO = 1.5f
         const val MAX_VOTES = 60
         const val MIN_VOTES = 8
-        const val CENTER_MIN = 150f
-        const val CENTER_MAX = 260f
+
+        // Field values of the vanishing-point column: 184–197 over several drives (this phone mount), 211 once.
+        const val DEFAULT_CENTER_X = 192f
+        const val CENTER_MIN = 178f
+        const val CENTER_MAX = 205f
+        const val OWN_SETTLE_MS = 2_000L
+        const val OWN_VOTE_GAP_MS = 1_000L
+        const val OWN_VOTE_GATE_PX = 8f
+        val OWN_VOTE_WIDTH_PX = 6f..14f
         val VOTE_RANGE = 100.0..320.0
     }
 }
