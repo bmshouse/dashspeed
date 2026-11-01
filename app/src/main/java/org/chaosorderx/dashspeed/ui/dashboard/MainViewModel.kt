@@ -46,6 +46,7 @@ data class DashboardUiState(
 )
 
 private const val MPS_TO_MPH = 2.237f
+private const val LEARN_MIN_MPH = 15f
 
 private fun lanesJson(lanes: List<LaneSummary>): JSONArray =
     JSONArray().also { array ->
@@ -132,7 +133,9 @@ class MainViewModel
                     speedEstimator.cleanupTracks(tracks.map { it.id }.toSet())
                     val rawAnnotations = tracks.mapNotNull { speedEstimator.estimate(it, egoSpeed) }
                     val annotations = if (gpsManager.headingChangeTooFast.value) emptyList() else rawAnnotations
-                    val report = laneAnalyzer.update(tracks, frame.timestampMs)
+                    // The road centre is only learned while driving straight at a real speed.
+                    val learning = egoSpeed * MPS_TO_MPH >= LEARN_MIN_MPH && !gpsManager.headingChangeTooFast.value
+                    val report = laneAnalyzer.update(tracks, frame.timestampMs, learning)
                     // "Fast approach" comes from the own-lane car's box growth (time to contact), not from speeds.
                     val alertMessage =
                         alertEngine.evaluate(report.approach.takeUnless { gpsManager.headingChangeTooFast.value })

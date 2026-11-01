@@ -13,7 +13,7 @@ import kotlin.math.exp
 import kotlin.math.pow
 
 private const val FRAME_MS = 67L
-private const val VP = 208f
+private const val VP = LaneAnalyzer.DEFAULT_CENTER_X
 
 /** A car whose centre sits [lateralM] metres from the road centre column, [width] px wide. */
 private fun carAt(
@@ -40,12 +40,13 @@ private fun carAt(
 private fun LaneAnalyzer.drive(
     seconds: Float,
     startMs: Long = 0L,
+    learning: Boolean = true,
     cars: (Float) -> List<TrackedVehicle>,
 ): LaneReport {
     var report: LaneReport? = null
     val frames = (seconds * 1000 / FRAME_MS).toInt()
     repeat(frames) { i ->
-        report = update(cars(i * FRAME_MS / 1000f), startMs + i * FRAME_MS)
+        report = update(cars(i * FRAME_MS / 1000f), startMs + i * FRAME_MS, learning)
     }
     return report!!
 }
@@ -133,8 +134,12 @@ class LaneAnalyzerTest : FreeSpec({
         analyzer.roadCenterX shouldBe (190f plusOrMinus 2f)
     }
 
+    "the default centre is where the field logs put it" {
+        LaneAnalyzer.DEFAULT_CENTER_X shouldBe (192f plusOrMinus 1f)
+    }
+
     "uses the default centre until enough evidence has been seen" {
-        LaneAnalyzer().roadCenterX shouldBe 208f
+        LaneAnalyzer().roadCenterX shouldBe LaneAnalyzer.DEFAULT_CENTER_X
     }
 
     "reports each track's lane once it has been seen a few frames" {
@@ -147,8 +152,8 @@ class LaneAnalyzerTest : FreeSpec({
 
     "a persisted road centre is restored, unless out of range or already learned this session" {
         LaneAnalyzer().apply { load(190f) }.roadCenterX shouldBe 190f
-        LaneAnalyzer().apply { load(0f) }.roadCenterX shouldBe 208f
-        LaneAnalyzer().apply { load(400f) }.roadCenterX shouldBe 208f
+        LaneAnalyzer().apply { load(0f) }.roadCenterX shouldBe LaneAnalyzer.DEFAULT_CENTER_X
+        LaneAnalyzer().apply { load(400f) }.roadCenterX shouldBe LaneAnalyzer.DEFAULT_CENTER_X
         val learned = LaneAnalyzer()
         val laterals = listOf(-5.5f, -2.5f, 0.5f, 0.2f, 0.8f, -2.2f, -2.8f, 3.5f, -5.2f, 0.4f)
         learned.drive(seconds = 15f) { t ->
@@ -169,6 +174,53 @@ class LaneAnalyzerTest : FreeSpec({
         job.cancel()
         emitted.last() shouldBe (190f plusOrMinus 2f)
         analyzer.reset()
-        analyzer.roadCenterX shouldBe 208f
+        analyzer.roadCenterX shouldBe LaneAnalyzer.DEFAULT_CENTER_X
+    }
+    "road centre from own-lane cars" - {
+        val trueCenter = 196f // 4 px right of the default: a lane-0 car at 10 px wide is still read as lane 0
+
+        "a settled, distant own-lane car pulls the centre to where it implies" {
+            val analyzer = LaneAnalyzer()
+            analyzer.drive(seconds = 25f) { listOf(carAt(1, 10f, 0.5f, vp = trueCenter)) }
+            analyzer.roadCenterX shouldBe (trueCenter plusOrMinus 1f)
+        }
+
+        "cars in the neighbouring lanes do not vote" {
+            val analyzer = LaneAnalyzer()
+            analyzer.drive(seconds = 25f) {
+                listOf(carAt(1, 10f, -2.5f, vp = trueCenter), carAt(2, 10f, 3.5f, vp = trueCenter))
+            }
+            analyzer.roadCenterX shouldBe LaneAnalyzer.DEFAULT_CENTER_X
+        }
+
+        "a car too big or too small for a precise reading does not vote" {
+            val analyzer = LaneAnalyzer()
+            analyzer.drive(seconds = 25f) {
+                listOf(carAt(1, 30f, 0.5f, vp = trueCenter), carAt(2, 4f, 0.5f, vp = trueCenter))
+            }
+            analyzer.roadCenterX shouldBe LaneAnalyzer.DEFAULT_CENTER_X
+        }
+
+        "nothing is learned while learning is off (turning, crawling)" {
+            val analyzer = LaneAnalyzer()
+            analyzer.drive(seconds = 25f, learning = false) { listOf(carAt(1, 10f, 0.5f, vp = trueCenter)) }
+            analyzer.roadCenterX shouldBe LaneAnalyzer.DEFAULT_CENTER_X
+        }
+
+        "a vote far from the current estimate is ignored (cannot be pulled by a wrongly placed car)" {
+            val analyzer = LaneAnalyzer()
+            // Reads as lane 0 only if the analyzer's centre is near; at 30 px away it is lane +/-N, not a voter.
+            analyzer.drive(seconds = 25f) { listOf(carAt(1, 10f, 0.5f, vp = LaneAnalyzer.DEFAULT_CENTER_X + 30f)) }
+            analyzer.roadCenterX shouldBe LaneAnalyzer.DEFAULT_CENTER_X
+        }
+    }
+
+    "the learned centre never leaves the allowed range" {
+        val analyzer = LaneAnalyzer()
+        val laterals = listOf(-5.5f, -2.5f, 0.5f, 0.2f, 0.8f, -2.2f, -2.8f, 3.5f, -5.2f, 0.4f)
+        analyzer.drive(seconds = 15f) { t ->
+            laterals.mapIndexed { i, lateral -> carAt(i + 1, 15f * 2f.pow(t / 15f), lateral, vp = 230f) }
+        }
+        analyzer.roadCenterX shouldBe LaneAnalyzer.CENTER_MAX
     }
 })

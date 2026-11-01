@@ -1,6 +1,5 @@
 import kotlinx.kover.gradle.plugin.dsl.CoverageUnit
 import java.io.FileInputStream
-import java.net.URL
 import java.util.Properties
 
 plugins {
@@ -39,8 +38,8 @@ android {
         applicationId = "org.chaosorderx.dashspeed"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.3.0"
 
         testInstrumentationRunner = "org.chaosorderx.dashspeed.HiltTestRunner"
     }
@@ -135,61 +134,6 @@ kover {
         }
     }
 }
-
-// ---------------------------------------------------------------------------
-// Model asset download — configuration-cache-compatible abstract task
-// Set  modelUrl=<url>  in gradle.properties (or pass -PmodelUrl=<url>).
-// Use  -PforceModelUpdate  to delete the cached file and re-download.
-// ---------------------------------------------------------------------------
-abstract class DownloadModelTask : DefaultTask() {
-    @get:Input
-    abstract val modelUrl: Property<String>
-
-    @get:Input
-    abstract val forceUpdate: Property<Boolean>
-
-    @get:OutputFile
-    abstract val destFile: RegularFileProperty
-
-    @TaskAction
-    fun execute() {
-        val dest = destFile.get().asFile
-        if (dest.exists() && !forceUpdate.get()) {
-            logger.lifecycle("'${dest.name}' already present — skipping. Use -PforceModelUpdate to re-download.")
-            return
-        }
-        val url = modelUrl.get()
-        if (url.isBlank()) {
-            logger.warn(
-                """
-                |WARNING: '${dest.name}' not found and 'modelUrl' is not set.
-                |Detection is disabled at runtime until the model is provided.
-                |  • Run scripts/export_model_colab.py in Google Colab, then place
-                |    the file in app/src/main/assets/ manually.
-                |  • Or set  modelUrl=<url>  in gradle.properties to enable auto-download.
-                """.trimMargin(),
-            )
-            return
-        }
-        logger.lifecycle("Downloading ${dest.name} from $url …")
-        dest.parentFile.mkdirs()
-        @Suppress("DEPRECATION") // URL(String) is fine on JVM 17
-        URL(url).openStream().use { src ->
-            dest.outputStream().use { dst -> src.copyTo(dst) }
-        }
-        logger.lifecycle("Saved ${dest.length() / 1_024} KB → ${dest.path}")
-    }
-}
-
-tasks.register<DownloadModelTask>("downloadModel") {
-    group = "dashspeed"
-    description = "Download yolov8n_int8.tflite to assets/ when absent."
-    modelUrl.set(providers.gradleProperty("modelUrl").orElse(""))
-    forceUpdate.set(providers.gradleProperty("forceModelUpdate").map { true }.orElse(false))
-    destFile.set(layout.projectDirectory.dir("src/main/assets").file("yolov8n_int8.tflite"))
-}
-
-tasks.named("preBuild").configure { dependsOn("downloadModel") }
 
 dependencies {
     val composeBom = platform(libs.compose.bom)
